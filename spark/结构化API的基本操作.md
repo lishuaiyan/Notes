@@ -22,3 +22,52 @@ val peopleDF = spark.read("examples/src/main/resources/people.json")
 	* 列与对这些列的转换操作被编译后生成的逻辑计划， 与解析后的表达式的逻辑计划是一样的
 
 	* SQL 与 DataFrame代码在执行之前会编译成相同的底层逻辑树，这意味着SQL表达式与DataFrame代码的性是一样的
+
+
+* 常用操作
+
+```scala
+// 创建行
+import org.apache.spark.sql.Row
+val myRow = Row("Hello", null, 1, false)
+
+/*
+* 创建DataFrame
+*/
+
+// 通过读取数据文件创建DataFrame
+val df = spark.read.format("json").load("/data/summary.json")
+df.createOrReplaceTempView("dfTable")
+
+// 通过行创建DataFrame
+import org.apache.spark.sql.Row
+import org.apache.spark.sql.types.{StructField, StructType, StringType, LongType}
+
+val myManualSchema = new StructType(Array(
+	new StructField("some", StringType, true),
+	new StructField("col", StringType, true),
+	new StructField("names", LongType, false)
+))
+val myRows = Seq(Row("Hello", null, 1L))
+val MyRdd = spark.sparkContext.parallelize(myRows)
+
+val myDf = spark.createDataFrame(myRdd, myManualSchema)
+myDf.show()
+
+```
+
+```py
+# 创建行
+from pyspark.sql import Row
+myRow = Row("Hello", None, 1, False)
+
+# 创建DataFrame
+
+# 通过读取数据文件创建DataFrame
+df = spark.read.format("json").load("/data/summary.json")
+df.createOrReplaceTempView("dfTable")
+
+# 通过行创建DataFrame
+from pyspark.sql import Row
+from pyspark.sql.types import StructField, StructType, 
+```
