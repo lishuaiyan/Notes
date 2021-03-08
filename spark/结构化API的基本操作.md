@@ -1,6 +1,6 @@
 # 结构化API的基本操作
 
-* 数据源
+###  数据源
 
 ```scala
 /**
@@ -10,7 +10,7 @@
 val peopleDF = spark.read("examples/src/main/resources/people.json")
 ```
 
-* 列与表达式
+###  列与表达式
 
 
   列的引用方式 `col` / `column` /` $"myColumn"`/ `'myColumn` ,后两种为 scala api的独有的，一般习惯使用 `col`
@@ -24,7 +24,9 @@ val peopleDF = spark.read("examples/src/main/resources/people.json")
 	* SQL 与 DataFrame代码在执行之前会编译成相同的底层逻辑树，这意味着SQL表达式与DataFrame代码的性是一样的
 
 
-* 常用操作
+###  常用操作
+
+* 创建DataFrame
 
 ```scala
 // 创建行
@@ -69,5 +71,127 @@ df.createOrReplaceTempView("dfTable")
 
 # 通过行创建DataFrame
 from pyspark.sql import Row
-from pyspark.sql.types import StructField, StructType, 
+from pyspark.sql.types import StructField, StructType, StringType, LongType
+myManualSchema = StructType([
+	StructField("some", StringType(), True),
+	StructField("col", StringType(), True),
+	StructField("names", LongType(), False)
+])
+myRow = Row("Hello", None, 1)
+myDf = spark.createDataFrame([myRow], myManualSchema)
+myDf.show()
+
+```
+
+* select 和 selectExpr函数
+
+```scala
+// select示例
+import org.apache.spark.sql.functions.{expr, col, column}
+
+df.select(
+	df.col("DEST_COUNTRY_NAME"),
+	col("DEST_COUNTRY_NAME"),
+	column("DEST_COUNTRY_NAME"),
+	'DEST_COUNTRY_NAME,
+	$"DEST_COUNTRY_NAME",
+	expr("DEST_COUNTRY_NAME")
+).show(2)
+
+// selectExpr示例
+
+// 字段重命名
+df.selectExpr("DEST_COUNTRY_NAME as newColumn", "DEST_COUNTRY_NAME").show(2)
+
+df.selectExpr(
+	// 包含原始表的所有字段
+	"*",
+	// 增加一个新列
+	"(DEST_COUNTRY_NAME = ORIGIN_COUNTRY_NAME) as withinCountry")
+	.show(2)
+
+df.selectExpr("avg(count)", "count(distinct(DEST_COUNTRY_NAME))".show(2)
+
+
+```
+
+```py
+# select示例
+from pyspark.sql.functions import expr, col, column
+
+df.select(
+	expr("DEST_COUNTRY_NAME"),
+	col("DEST_COUNTRY_NAME"),
+	column("DEST_COUNTRY_NAME"))\
+	.show(2)
+
+# selectExpr 示例
+
+# 字段重命名
+df.selectExpr("DEST_COUNTRY_NAME as newColumn", "DEST_COUNTRY_NAME").show(2)
+
+df.selectExpr(
+	# 包含原始表中所有列
+	"*", 
+	# 增加一个新列
+	"(DEST_COUNTRY_NAME = ORIGIN_COUNTRY_NAME) as withinCountry")\
+		.show(2)
+)
+
+df.selectExpr("avg(count)", "count(distinct(DEST_COUNTRY_NAME))").show(2)
+```
+
+* 转换操作成Spark类型(字面量)
+
+```scala
+import org.apache.spark.sql.functions.lit
+df.select(expr("*"), lit(1).as("One")).show(2)
+```
+
+```py
+from pyspark.sql.functions import lit
+df.select(expr("*"), lit(1).alias("One")).show(2)
+```
+* 添加列
+
+```scala
+df.withColumn("number", lit(1)).show(2)
+
+df.withColumn("withinCountry", expr("ORIGIN_COUNTRY_NAME == DEST_COUNTRY_NAME"))
+.show(2)
+```
+
+```py
+df.withColumn("numberOne", lit(1)).show(2)
+
+df.withColumn("withinCountry", expr("ORIGIN_COUNTRY_NAME == DEST_COUNTRY_NAME"))\
+.show(2)
+```
+* 重命名列
+
+```scala
+df.withColumnRenamed("DEST_COUNTRY_NAME", "dest").columns
+```
+
+```py
+df.withColumnRenamed("DEST_COUNTRY_NAME", "dest").columns
+```
+
+* 保留字与关键字
+
+      遇到列名中包含空格或者连字符等保留字符，此时需要通过反引号 (`) 来引用
+
+* 区分大小写
+
+      Spark默认是不区分大小写的，但可以通过如下配置使Spark区分大小写
+
+```sql
+-- in SQL
+set spark.sql.caseSensitive true
+```
+
+* 更改列的类型
+
+```scala
+df.withColumn("count2", col("count").cast("long"))
 ```
