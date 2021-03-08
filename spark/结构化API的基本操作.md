@@ -195,3 +195,158 @@ set spark.sql.caseSensitive true
 ```scala
 df.withColumn("count2", col("count").cast("long"))
 ```
+
+* 过滤行
+
+      以下过滤器在scala和python中是等效的
+
+```scala
+df.filter(col("count") < 2).show(2)
+df.where("count < 2").show(2)
+```
+
+    Spark会同时执行所有的过滤操作，所以只需要按照先后顺序以链接的方式把这些条件串联起来，然后让Spark执行剩下的工作
+
+```scala
+df.where(col("count") < 2).where(col("ORIGIN_COUNTRY_NAME") =!= "Croatia")
+.show(2)
+```
+
+```py
+df.where(col("count") < 2).where(col("ORIGIN_COUNTRY_NAME") != "Croatia")\
+.show(2)
+```
+
+
+* 随机抽样
+
+```scala
+val seed = 5
+// TRUE 为有放回的抽样，FALSE 为无放回的抽样
+val withReplacement = false
+val fraction = 0.5
+df.sample(withReplacement, fraction, seed).count()
+```
+
+```py
+seed = 5
+// TRUE 为有放回的抽样，FALSE 为无放回的抽样
+withReplacement = False
+fraction = 0.5
+df.sample(withReplacement, fraction, seed).count()
+```
+
+* 随机分割
+
+      通常是在机器学习算法中，用于分割数据集来创建数据集，验证集和测试集
+      由于随机分割是一种随机方法，所以我们还需要指定一个随机种子 seed
+
+```scala
+val dataFrames = df.randomSplit(Array(0.25, 0.75), seed)
+dataFrames(0).count() > dataFrames(1).count() // 结果为False
+```
+
+```py
+dataFrames = df.randomSplit([0.25, 0.75], seed)
+dataFrames[0].count() > dataFrames[1].count() # 结果为False
+```
+
+
+* 连接和追加行（联合操作）
+
+  * 想联合两个DataFrame，你必须确保它们具有相同的模式和列数，否则联合操作将失败，因为目前联合操作是基于位置而不是基于数据模式Schema执行
+
+```scala
+import org.apache.spark.sql.Row
+
+val schema = df.schema
+val newRows = Seq(
+	Row("New Country", "other country", 5L),
+	Row("New Country 2", "other Country 2"， 1L)
+)
+val parallelizedRows = spark.sparkContext.parallelize(newRows)
+val newDf = spark.createDataFrame(parallelizedRows, schema)
+df.union(newDf)
+.where("count = 1")
+.where($"ORIGIN_COUNTRY_NAME" =!= "UNited States")
+.show()
+```
+
+```py
+from pyspark.sql import Row
+
+schema = df.schema
+newRows = [
+	Row("New COuntry", "other Country", 5L),
+	Row("New Country 2", "other Country 2", 1L)
+]
+parallelizedRows = spark.sparkContext.parallelize(newRows)
+newDf = spark.createDataFrame(parallelizedRows, schema)
+df.union(newDf)\
+.where("count = 1")\
+.where(col("ORIGIN_COUNTRY_NAME" != "United States"))\
+.show()
+```
+
+* 行排序
+
+      sort 和 orderBy 是相互等价的操作
+	  一个高级功能就是可以指定空值在排序列表中的位置
+	  1、asc_nulls_first 指示空值安排在升序排列前面
+	  2、asc_nulls_last 指示空值安排在升序排列的后面
+	  3、desc_nulls_first 和 desc_nulls_last 同理
+
+```scala
+import org.spark.sql.functions.{desc, asc}
+df.sort("count").show(5)
+df.orderBy("count", "DEST_COUNTRY_NAME").show(5)
+df.orderBy(col("count"), col("DEST_COUNTRY_NAME")).show(5)
+
+df.orderBy(expr("count desc")).show(2)
+df.orderBy(desc("count"), asc("DEST_COUNTRY_NAME")).show(2)
+
+// 处于性能考虑，可以使用sortWithinPartitions方法对每个分区内部进行排序
+spark.read.format("json").load("-summary.json")
+.sortWithinPartitions("count")
+```
+
+```py
+# in Python
+from pyspark.sql.functions import desc, asc
+df.sort("count").show(5)
+df.orderBy("count", "DEST_COUNTRY_NAME").show(5)
+df.orderBy(col("count"), col("DEST_COUNTRY_NAME")).show(5)
+
+df.orderBy(expr("count desc")).show(2)
+df.orderBy(col("count").desc(), col("DEST_COUNTRY_NAME").asc()).show(2)
+
+# 处于性能考虑，可以使用sortWithinPartitions方法对每个分区内部进行排序
+spark.read.format("json").load("-summary.json")\
+.sortWithinPartitions("count")
+```
+
+* 重划分和合并
+
+```scala
+df.rdd.getNumPartitions
+// 重分区会导致全面洗牌
+df.repartition(5)
+// 如果你知道经常按某一列执行过滤操作，则根据该列进行重分区是很有必要的
+df.repartition(col("count"))
+df.repartition(5, col("count"))
+// 合并操作，不会导致数据的全面洗牌，但会尝试合并分区
+df.coalesce(2)
+```
+
+
+```py
+# in Python
+df.rdd.getNumPartitions
+# 重分区会导致全面洗牌
+df.repartition(5)
+# 如果你知道经常按某一列执行过滤操作，则根据该列进行重分区是很有必要的
+df.repartition(col("count"))
+df.repartition(5, col("count"))
+# 合并操作，不会导致数据的全面洗牌，但会尝试合并分区
+df.coalesce(2)
+```
